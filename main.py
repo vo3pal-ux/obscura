@@ -1,5 +1,5 @@
 """
-LuauShield — Advanced Luau Obfuscator for Roblox Studio
+Obscura — Advanced Luau Obfuscator for Roblox Studio
 ==========================================================
 CLI Entry Point
 
@@ -25,11 +25,11 @@ colorama_init(autoreset=True)
 # Banner
 BANNER = (
     f"\n{Fore.CYAN}"
-    "  _                      ____  _     _      _     _ \n"
-    " | |   _   _  __ _ _   _/ ___|| |__ (_) ___| | __| |\n"
-    " | |  | | | |/ _` | | | \\___ \\| '_ \\| |/ _ \\ |/ _` |\n"
-    " | |__| |_| | (_| | |_| |___) | | | | |  __/ | (_| |\n"
-    " |_____\\__,_|\\__,_|\\__,_|____/|_| |_|_|\\___|_|\\__,_|\n"
+    "   ___  _                                \n"
+    "  / _ \\| |__  ___  ___ _   _ _ __ __ _ \n"
+    " | | | | '_ \\/ __|/ __| | | | '__/ _` |\n"
+    " | |_| | |_) \\__ \\ (__| |_| | | | (_| |\n"
+    "  \\___/|_.__/|___/\\___|\\__,_|_|  \\__,_|\n"
     f"{Style.RESET_ALL}"
     f"  {Fore.WHITE}Advanced Luau Obfuscator for Roblox Studio{Style.RESET_ALL}\n"
     f"  {Fore.LIGHTBLACK_EX}v1.0.0 -- 9-Layer Protection System{Style.RESET_ALL}\n"
@@ -86,7 +86,7 @@ def print_layer(name: str, enabled: bool):
               help='Suppress banner and verbose output.')
 def main(input_path, output_path, level, vm, antitamper, strings, cff,
          deadcode, seed, recursive, density, lightweight, quiet):
-    """LuauShield — Advanced Luau Obfuscator for Roblox Studio"""
+    """Obscura — Advanced Luau Obfuscator for Roblox Studio"""
 
     if not quiet:
         click.echo(BANNER)

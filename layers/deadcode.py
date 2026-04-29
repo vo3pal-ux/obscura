@@ -1,5 +1,5 @@
 """
-LuauShield Layer 6 — Dead Code Injection
+Obscura Layer 6 — Dead Code Injection
 ==========================================
 Injects realistic-looking but unreachable/meaningless code:
 - Fake function definitions

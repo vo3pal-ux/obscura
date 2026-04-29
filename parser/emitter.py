@@ -1,5 +1,5 @@
 """
-LuauShield AST Emitter
+Obscura AST Emitter
 ========================
 Converts AST nodes back into valid Luau source code.
 Supports minified output with correct operator precedence.

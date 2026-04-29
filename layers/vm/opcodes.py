@@ -1,5 +1,5 @@
 """
-LuauShield VM Opcodes
+Obscura VM Opcodes
 ======================
 Defines the custom instruction set for the virtual machine.
 Opcode values are randomized per-build (polymorphic).
@@ -49,9 +49,9 @@ INSTRUCTION_NAMES = [
     ('LEN', 0),            # Length operator #
 
     # Control flow
-    ('JMP', 1),            # Unconditional jump: [offset]
-    ('JMP_FALSE', 1),      # Jump if falsy: [offset]
-    ('JMP_TRUE', 1),       # Jump if truthy: [offset]
+    ('JMP', 2),            # Unconditional jump: [offset_lo, offset_hi]
+    ('JMP_FALSE', 2),      # Jump if falsy: [offset_lo, offset_hi]
+    ('JMP_TRUE', 2),       # Jump if truthy: [offset_lo, offset_hi]
 
     # Functions
     ('CALL', 2),           # Call function: [argc, retc]
@@ -71,6 +71,8 @@ INSTRUCTION_NAMES = [
 
     # Special
     ('MOVE', 2),           # Copy local: [dest, src]
+    ('DUP', 0),            # Duplicate top of stack
+    ('SWAP', 0),           # Swap top two elements
     ('NOP', 0),            # No operation (junk instruction)
 ]
 

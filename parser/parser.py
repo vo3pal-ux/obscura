@@ -1,5 +1,5 @@
 """
-LuauShield Parser
+Obscura Parser
 ==================
 Recursive-descent parser: token stream → AST.
 Handles all common Luau constructs. Gracefully skips type annotations.

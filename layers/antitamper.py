@@ -1,5 +1,5 @@
 """
-LuauShield Layer 8 — Anti-Tamper
+Obscura Layer 8 — Anti-Tamper
 ==================================
 Injects Roblox environment validation, hook detection, timing checks,
 integrity verification, and IIFE wrapping for script protection.

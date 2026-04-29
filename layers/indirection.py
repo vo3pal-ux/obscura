@@ -1,5 +1,5 @@
 """
-LuauShield Layer 7 — Table Indirection
+Obscura Layer 7 — Table Indirection
 ========================================
 Replaces all global/stdlib function references with lookups through
 an encrypted indirection table. Defeats simple grep for API names.

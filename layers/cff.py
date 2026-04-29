@@ -1,5 +1,5 @@
 """
-LuauShield Layer 4 — Control Flow Flattening
+Obscura Layer 4 — Control Flow Flattening
 ===============================================
 Transforms sequential code blocks into state-machine dispatchers.
 Uses while-loop + if/elseif chains with randomized state values.

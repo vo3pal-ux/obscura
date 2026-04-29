@@ -1,5 +1,5 @@
 """
-LuauShield Obfuscator — Pipeline Orchestrator
+Obscura Obfuscator — Pipeline Orchestrator
 ================================================
 Chains all obfuscation layers in the correct order, manages the full
 transformation pipeline from source code to protected output.
@@ -123,7 +123,7 @@ class Obfuscator:
         output = output.replace('\n', ' ').replace('\r', ' ')
 
         # Add build signature comment (exactly 3 lines)
-        header = f"--!nocheck\n--!nolint\n-- LuauShield [{self.config._build_id}]\n"
+        header = f"--!nocheck\n--!nolint\n-- Obscura [{self.config._build_id}]\n"
         return header + output
 
     def _obfuscate_vm(self, source: str) -> str:
@@ -155,8 +155,8 @@ class Obfuscator:
 
         # Construct the final code
         code_parts = [
-            "print('LuauShield VM Protected Script Loading...')",
-            "print('LuauShield VM Payload Initializing...')",
+            "print('Obscura VM Protected Script Loading...')",
+            "print('Obscura VM Payload Initializing...')",
             vm_output
         ]
         
@@ -170,7 +170,7 @@ class Obfuscator:
         final_code = final_code.replace('\n', ' ').replace('\r', ' ')
 
         # Add build signature and suppress Studio analysis (exactly 3 lines of comments)
-        header = f"--!nocheck\n--!nolint\n-- LuauShield VM [{self.config._build_id}]\n"
+        header = f"--!nocheck\n--!nolint\n-- Obscura VM [{self.config._build_id}]\n"
         return header + final_code
 
     def _strip_types(self, source: str) -> str:

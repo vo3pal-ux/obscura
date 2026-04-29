@@ -1,5 +1,5 @@
 """
-LuauShield VM Constant Pool
+Obscura VM Constant Pool
 ==============================
 Builds and encrypts the constant pool for the custom VM.
 Supports strings, numbers, booleans, and nil constants.

@@ -1,5 +1,5 @@
 """
-LuauShield Layer 2 — String Encryption
+Obscura Layer 2 — String Encryption
 ========================================
 Collects all string literals, encrypts them with per-string XOR keys + Base64,
 builds a centralized string table, and injects a polymorphic decoder.

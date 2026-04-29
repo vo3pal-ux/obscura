@@ -1,5 +1,5 @@
 """
-LuauShield Name Generator
+Obscura Name Generator
 ==========================
 Generates obfuscated identifier names using Luau-compatible strategies.
 IMPORTANT: Luau only supports ASCII identifiers [a-zA-Z_][a-zA-Z0-9_]*

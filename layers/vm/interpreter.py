@@ -1,5 +1,5 @@
 """
-LuauShield VM Interpreter Generator
+Obscura VM Interpreter Generator
 =====================================
 Generates the polymorphic Luau interpreter stub that gets embedded in the output.
 This is the runtime VM that executes custom bytecode in Roblox.
@@ -198,9 +198,9 @@ end"""
         h('LEN', f"{stk}[{sp}]=#({stk}[{sp}])")
 
         # Control flow
-        h('JMP', f"local _off={bc}[{ip}];{ip}={ip}+1;if _off>127 then _off=_off-256 end;{ip}={ip}+_off")
-        h('JMP_FALSE', f"local _off={bc}[{ip}];{ip}={ip}+1;if not {stk}[{sp}] then {sp}={sp}-1;if _off>127 then _off=_off-256 end;{ip}={ip}+_off else {sp}={sp}-1 end")
-        h('JMP_TRUE', f"local _off={bc}[{ip}];{ip}={ip}+1;if {stk}[{sp}] then {sp}={sp}-1;if _off>127 then _off=_off-256 end;{ip}={ip}+_off else {sp}={sp}-1 end")
+        h('JMP', f"local _off={bc}[{ip}]+{bc}[{ip}+1]*256;{ip}={ip}+2;if _off>32767 then _off=_off-65536 end;{ip}={ip}+_off")
+        h('JMP_FALSE', f"local _off={bc}[{ip}]+{bc}[{ip}+1]*256;{ip}={ip}+2;if not {stk}[{sp}] then {sp}={sp}-1;if _off>32767 then _off=_off-65536 end;{ip}={ip}+_off else {sp}={sp}-1 end")
+        h('JMP_TRUE', f"local _off={bc}[{ip}]+{bc}[{ip}+1]*256;{ip}={ip}+2;if {stk}[{sp}] then {sp}={sp}-1;if _off>32767 then _off=_off-65536 end;{ip}={ip}+_off else {sp}={sp}-1 end")
 
         # Functions — use unpack (Luau) not table.unpack
         h('CALL', f"local _ac={bc}[{ip}];{ip}={ip}+1;local _rc={bc}[{ip}];{ip}={ip}+1;local _ar={{}};for _ci=_ac,1,-1 do _ar[_ci]={pp}() end;local _fn={pp}();local _rt={{_fn(unpack(_ar))}};for _ci=1,math.min(_rc,#_rt) do {p}(_rt[_ci]) end")
@@ -213,7 +213,8 @@ end"""
         # Tables
         h('NEW_TABLE', f"local _arr={bc}[{ip}];{ip}={ip}+1;local _hash={bc}[{ip}];{ip}={ip}+1;{p}({{}})")
         h('GET_TABLE', f"local _key={pp}();local _tbl={pp}();{p}(_tbl[_key])")
-        h('SET_TABLE', f"local _val={pp}();local _key={pp}();local _tbl={stk}[{sp}];_tbl[_key]=_val")
+        h('SET_TABLE', f"local _key={pp}();local _tbl={pp}();local _val={pp}();_tbl[_key]=_val")
+        h('SET_LIST', f"local _start={bc}[{ip}];{ip}={ip}+1;local _cnt={bc}[{ip}];{ip}={ip}+1;local _tbl={stk}[{sp}];for _ci=1,_cnt do _tbl[_start+_ci-1]={pp}() end")
 
         # Closure
         h('CLOSURE', f"local _idx={bc}[{ip}];{ip}={ip}+1;local _proto={v['proto_tbl']}[_idx+1];{p}(function(...) return {v['vm_func']}(_proto,{v['constants']},{v['env']},{v['proto_tbl']},{{...}}) end)")
@@ -221,7 +222,12 @@ end"""
         # Vararg
         h('VARARG', f"local _cnt={bc}[{ip}];{ip}={ip}+1;{p}(nil)")
 
+        # Special
+        h('MOVE', f"local _dest={bc}[{ip}];{ip}={ip}+1;local _src={bc}[{ip}];{ip}={ip}+1;{loc}[_dest]={loc}[_src]")
+        h('DUP', f"{p}({stk}[{sp}])")
+        h('SWAP', f"local _a={pp}();local _b={pp}();{p}(_a);{p}(_b)")
+
         # NOP
-        h('NOP', "-- nop")
+        h('NOP', "--[[ nop ]]")
 
         return handlers

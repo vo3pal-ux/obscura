@@ -1,5 +1,5 @@
 """
-LuauShield Layer 1 — Identifier Renaming
+Obscura Layer 1 — Identifier Renaming
 ==========================================
 Walk AST, rename all local variables and parameters with obfuscated names.
 Scope-aware to prevent collisions. Never renames globals/Roblox APIs.

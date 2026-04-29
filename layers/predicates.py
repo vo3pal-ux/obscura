@@ -1,5 +1,5 @@
 """
-LuauShield Layer 5 — Opaque Predicates
+Obscura Layer 5 — Opaque Predicates
 ========================================
 Generates always-true and always-false conditions using mathematical identities.
 Wraps real code in true predicates, injects dead branches in false predicates.

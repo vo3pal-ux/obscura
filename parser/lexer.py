@@ -1,5 +1,5 @@
 """
-LuauShield Lexer
+Obscura Lexer
 =================
 Full Luau tokenizer producing a stream of typed tokens with position tracking.
 Handles: keywords, identifiers, numbers, strings (single/double/long/interpolated),

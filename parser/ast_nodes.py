@@ -1,5 +1,5 @@
 """
-LuauShield AST Node Definitions
+Obscura AST Node Definitions
 =================================
 All AST node types for representing Luau source code structure.
 Each node stores enough information for faithful code emission.

@@ -1,10 +1,10 @@
-# LuauShield — Advanced Luau Obfuscator
+# Obscura — Advanced Luau Obfuscator
 
-**LuauShield** is a professional-grade obfuscation engine designed specifically for Luau, the scripting language used in Roblox Studio. It employs a multi-layered protection system to secure your intellectual property against reverse engineering and unauthorized tampering.
+**Obscura** is a professional-grade obfuscation engine designed specifically for Luau, the scripting language used in Roblox Studio. It employs a multi-layered protection system to secure your intellectual property against reverse engineering and unauthorized tampering.
 
 ## 🛡️ Key Features
 
-LuauShield features a comprehensive **9-Layer Protection System**:
+Obscura features a comprehensive **9-Layer Protection System**:
 
 1.  **Identifier Renaming**: Comprehensive renaming of local and global variables using various entropy-based strategies.
 2.  **String Encryption**: Dynamic encryption of all literal strings with runtime decryption.
@@ -21,8 +21,8 @@ LuauShield features a comprehensive **9-Layer Protection System**:
 Ensure you have Python 3.8+ installed.
 
 ```bash
-git clone https://github.com/yourusername/LuauShield.git
-cd LuauShield
+git clone https://github.com/yourusername/Obscura.git
+cd Obscura
 pip install -r requirements.txt
 ```
 

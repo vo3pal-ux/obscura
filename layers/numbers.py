@@ -1,5 +1,5 @@
 """
-LuauShield Layer 3 — Number Obfuscation
+Obscura Layer 3 — Number Obfuscation
 =========================================
 Replace numeric literals with equivalent MBA expressions.
 Uses arithmetic, bitwise XOR identities, and nested compositions.

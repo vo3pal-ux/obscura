@@ -1,6 +1,6 @@
 """
-LuauShield Configuration
-========================
+Obscura Configuration
+=====================
 ObfuscationConfig dataclass with per-layer toggles and protection level presets.
 """
 

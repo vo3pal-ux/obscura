@@ -1,5 +1,5 @@
 """
-LuauShield VM Compiler
+Obscura VM Compiler
 ========================
 Walks the AST and emits custom bytecode for the stack-based VM.
 Handles constants, locals, globals, arithmetic, control flow, and function calls.
@@ -155,11 +155,17 @@ class VMCompiler:
                     idx = self.pool.add(target.name)
                     self._emit(self.opcodes.get('SET_GLOBAL'), idx)
             elif isinstance(target, IndexExpr):
+                # We need [tbl, key, val] on stack for SET_TABLE
                 self._compile_expr(target.object)
                 self._compile_expr(target.index)
-                # value is already on stack from above
+                # Value is already on stack from earlier evaluation
+                # But it's at the bottom: [val, tbl, key]
+                # Actually, I'll evaluate val AFTER tbl and key for single assignments
+                # to keep it simple, but for multi-assignments it's complex.
+                # Since we changed SET_TABLE to pop key, tbl, val, we need [val, tbl, key].
                 self._emit(self.opcodes.get('SET_TABLE'))
             elif isinstance(target, MemberExpr):
+                # We need [val, tbl, key] on stack for SET_TABLE
                 self._compile_expr(target.object)
                 idx = self.pool.add(target.member)
                 self._emit(self.opcodes.get('PUSH_CONST'), idx)
@@ -232,18 +238,18 @@ class VMCompiler:
                 # Short-circuit: if first is falsy, skip second
                 self._compile_expr(node.left)
                 jump_pos = self._current_pos()
-                self._emit(self.opcodes.get('JMP_FALSE'), 0)  # Placeholder
+                self._emit(self.opcodes.get('JMP_FALSE'), 0, 0)  # 16-bit placeholder
                 self._emit(self.opcodes.get('POP'))
                 self._compile_expr(node.right)
-                self._emit_at(jump_pos + 1, self._current_pos() - jump_pos - 2)
+                self._patch_jump(jump_pos, self._current_pos())
                 return  # Already handled
             elif node.op == 'or':
                 self._compile_expr(node.left)
                 jump_pos = self._current_pos()
-                self._emit(self.opcodes.get('JMP_TRUE'), 0)
+                self._emit(self.opcodes.get('JMP_TRUE'), 0, 0)
                 self._emit(self.opcodes.get('POP'))
                 self._compile_expr(node.right)
-                self._emit_at(jump_pos + 1, self._current_pos() - jump_pos - 2)
+                self._patch_jump(jump_pos, self._current_pos())
                 return
 
         elif isinstance(node, UnaryOp):
@@ -263,12 +269,16 @@ class VMCompiler:
 
         elif isinstance(node, MethodCall):
             self._compile_expr(node.object)
-            # Duplicate object for self parameter
+            # Stack: [obj]
+            self._emit(self.opcodes.get('DUP'))
+            # Stack: [obj, obj]
             idx = self.pool.add(node.method)
             self._emit(self.opcodes.get('PUSH_CONST'), idx)
+            # Stack: [obj, obj, "method"]
             self._emit(self.opcodes.get('GET_TABLE'))
-            # Push self + args
-            self._compile_expr(node.object)
+            # Stack: [obj, func]
+            self._emit(self.opcodes.get('SWAP'))
+            # Stack: [func, obj]
             for arg in node.args:
                 self._compile_expr(arg)
             self._emit(self.opcodes.get('CALL'), len(node.args) + 1, 1)
@@ -287,6 +297,7 @@ class VMCompiler:
         elif isinstance(node, TableConstructor):
             self._emit(self.opcodes.get('NEW_TABLE'), len(node.fields), 0)
             for i, field in enumerate(node.fields):
+                self._emit(self.opcodes.get('DUP'))
                 if field.key is None:
                     # Array part
                     idx = self.pool.add(i + 1)
@@ -338,30 +349,36 @@ class VMCompiler:
         elif isinstance(node, VarargExpr):
             self._emit(self.opcodes.get('VARARG'), 1)
 
+    def _patch_jump(self, jump_pos: int, target_pos: int):
+        """Patch a 16-bit jump at jump_pos to point to target_pos."""
+        offset = target_pos - jump_pos - 3  # op + 2-byte offset
+        self._emit_at(jump_pos + 1, offset & 0xFF)
+        self._emit_at(jump_pos + 2, (offset >> 8) & 0xFF)
+
     def _compile_if(self, node: IfStatement):
         """Compile an if statement."""
         self._compile_expr(node.condition)
         false_jump = self._current_pos()
-        self._emit(self.opcodes.get('JMP_FALSE'), 0)
+        self._emit(self.opcodes.get('JMP_FALSE'), 0, 0)
 
         self._compile_block(node.body)
         end_jumps = []
         end_jumps.append(self._current_pos())
-        self._emit(self.opcodes.get('JMP'), 0)
+        self._emit(self.opcodes.get('JMP'), 0, 0)
 
         # Patch false jump
-        self._emit_at(false_jump + 1, self._current_pos() - false_jump - 2)
+        self._patch_jump(false_jump, self._current_pos())
 
         for clause in node.elseif_clauses:
             self._compile_expr(clause.condition)
             false_jump = self._current_pos()
-            self._emit(self.opcodes.get('JMP_FALSE'), 0)
+            self._emit(self.opcodes.get('JMP_FALSE'), 0, 0)
 
             self._compile_block(clause.body)
             end_jumps.append(self._current_pos())
-            self._emit(self.opcodes.get('JMP'), 0)
+            self._emit(self.opcodes.get('JMP'), 0, 0)
 
-            self._emit_at(false_jump + 1, self._current_pos() - false_jump - 2)
+            self._patch_jump(false_jump, self._current_pos())
 
         if node.else_body:
             self._compile_block(node.else_body)
@@ -369,7 +386,7 @@ class VMCompiler:
         # Patch all end jumps
         end_pos = self._current_pos()
         for jp in end_jumps:
-            self._emit_at(jp + 1, end_pos - jp - 2)
+            self._patch_jump(jp, end_pos)
 
     def _compile_while(self, node: WhileLoop):
         """Compile a while loop."""
@@ -378,20 +395,20 @@ class VMCompiler:
 
         self._compile_expr(node.condition)
         exit_jump = self._current_pos()
-        self._emit(self.opcodes.get('JMP_FALSE'), 0)
+        self._emit(self.opcodes.get('JMP_FALSE'), 0, 0)
 
         self._compile_block(node.body)
 
         # Jump back to start
-        back_offset = loop_start - self._current_pos() - 2
-        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF)
+        back_offset = loop_start - self._current_pos() - 3
+        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF, (back_offset >> 8) & 0xFF)
 
         # Patch exit jump
-        self._emit_at(exit_jump + 1, self._current_pos() - exit_jump - 2)
+        self._patch_jump(exit_jump, self._current_pos())
 
         # Patch break targets
         for bp in self._break_targets.pop():
-            self._emit_at(bp + 1, self._current_pos() - bp - 2)
+            self._patch_jump(bp, self._current_pos())
 
     def _compile_numeric_for(self, node: NumericFor):
         """Compile a numeric for loop."""
@@ -414,7 +431,7 @@ class VMCompiler:
         self._emit(self.opcodes.get('PUSH_LOCAL'), stop_slot)
         self._emit(self.opcodes.get('LE'))
         exit_jump = self._current_pos()
-        self._emit(self.opcodes.get('JMP_FALSE'), 0)
+        self._emit(self.opcodes.get('JMP_FALSE'), 0, 0)
 
         self._compile_block(node.body)
 
@@ -429,13 +446,13 @@ class VMCompiler:
         self._emit(self.opcodes.get('SET_LOCAL'), slot)
 
         # Loop back
-        back_offset = loop_start - self._current_pos() - 2
-        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF)
+        back_offset = loop_start - self._current_pos() - 3
+        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF, (back_offset >> 8) & 0xFF)
 
-        self._emit_at(exit_jump + 1, self._current_pos() - exit_jump - 2)
+        self._patch_jump(exit_jump, self._current_pos())
 
         for bp in self._break_targets.pop():
-            self._emit_at(bp + 1, self._current_pos() - bp - 2)
+            self._patch_jump(bp, self._current_pos())
 
     def _compile_generic_for(self, node: GenericFor):
         """Compile a generic for loop (simplified)."""
@@ -461,17 +478,17 @@ class VMCompiler:
         self._emit(self.opcodes.get('PUSH_NIL'))
         self._emit(self.opcodes.get('EQ'))
         exit_jump = self._current_pos()
-        self._emit(self.opcodes.get('JMP_TRUE'), 0)
+        self._emit(self.opcodes.get('JMP_TRUE'), 0, 0)
 
         self._compile_block(node.body)
 
-        back_offset = loop_start - self._current_pos() - 2
-        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF)
+        back_offset = loop_start - self._current_pos() - 3
+        self._emit(self.opcodes.get('JMP'), back_offset & 0xFF, (back_offset >> 8) & 0xFF)
 
-        self._emit_at(exit_jump + 1, self._current_pos() - exit_jump - 2)
+        self._patch_jump(exit_jump, self._current_pos())
 
         for bp in self._break_targets.pop():
-            self._emit_at(bp + 1, self._current_pos() - bp - 2)
+            self._patch_jump(bp, self._current_pos())
 
     def _compile_repeat(self, node: RepeatUntil):
         """Compile a repeat...until loop."""
@@ -482,11 +499,11 @@ class VMCompiler:
         self._compile_expr(node.condition)
 
         # Jump back if condition is false
-        back_offset = loop_start - self._current_pos() - 2
-        self._emit(self.opcodes.get('JMP_FALSE'), back_offset & 0xFF)
+        back_offset = loop_start - self._current_pos() - 3
+        self._emit(self.opcodes.get('JMP_FALSE'), back_offset & 0xFF, (back_offset >> 8) & 0xFF)
 
         for bp in self._break_targets.pop():
-            self._emit_at(bp + 1, self._current_pos() - bp - 2)
+            self._patch_jump(bp, self._current_pos())
 
     def _compile_return(self, node: ReturnStatement):
         """Compile a return statement."""
@@ -508,8 +525,8 @@ class VMCompiler:
         """Compile a continue statement."""
         if self._continue_targets:
             target = self._continue_targets[-1]
-            offset = target - self._current_pos() - 2
-            self._emit(self.opcodes.get('JMP'), offset & 0xFF)
+            offset = target - self._current_pos() - 3
+            self._emit(self.opcodes.get('JMP'), offset & 0xFF, (offset >> 8) & 0xFF)
 
     def _compile_func_decl(self, node: FunctionDecl):
         """Compile a function declaration."""

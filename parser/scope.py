@@ -1,5 +1,5 @@
 """
-LuauShield Scope Tracker
+Obscura Scope Tracker
 ==========================
 Scope tree with parent-child chain for tracking variable definitions,
 resolving identifiers, and determining what can be renamed.

@@ -1,5 +1,5 @@
 """
-LuauShield Globals Whitelist
+Obscura Globals Whitelist
 =============================
 Comprehensive list of Roblox/Luau globals that must NEVER be renamed.
 Categorized by origin: Lua stdlib, Roblox engine, datatypes, services, task library.

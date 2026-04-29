@@ -1,5 +1,5 @@
 """
-LuauShield Crypto Utilities
+Obscura Crypto Utilities
 =============================
 XOR encryption, Base64, MBA expression generation, and key utilities.
 """
