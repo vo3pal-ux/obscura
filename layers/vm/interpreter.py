@@ -112,6 +112,9 @@ class InterpreterGenerator:
         all_protos = self._flatten_protos(main_proto)
         parts.append(self._gen_protos(names, all_protos))
 
+        if self.config.vm_integrity_check:
+            parts.append(self._gen_integrity_check(names))
+
         # 5. Lookup tables used by the exec function (must come BEFORE exec).
         parts.append(self._gen_lookup_tables(names))
 
@@ -132,7 +135,7 @@ class InterpreterGenerator:
             # Globals
             'bxor', 'unpack', 'env',
             # Tables
-            'consts', 'ck', 'ckn',
+            'consts', 'ck', 'ckn', 'cget',
             'bk', 'bkn',
             'protos',
             # Exec function and locals
@@ -183,10 +186,27 @@ local {n['env']}=(getfenv and getfenv()) or _G"""
     # =================================================================
 
     def _gen_constant_pool(self, n: Dict[str, str]) -> str:
-        key_entries = ','.join(str(k) for k in self.pool.key)
+        key_entries = self._gen_key_table(self.pool.key, n)
         consts_table = self.pool.to_luau_table()
+        if self.config.vm_lazy_constants:
+            return f"""local {n['ck']}={key_entries}
+local {n['ckn']}=#{n['ck']}
+local {n['consts']}={consts_table}
+local {n['cget']}
+{n['cget']}=function({n['i']})
+local {n['tmp']}={n['consts']}[{n['i']}]
+if type({n['tmp']})=="string" then
+local {n['tmp2']}={{}}
+for {n['j']}=1,#{n['tmp']} do
+{n['tmp2']}[{n['j']}]=string.char({n['bxor']}(string.byte({n['tmp']},{n['j']}),{n['ck']}[({n['j']}-1)%{n['ckn']}+1]))
+end
+{n['tmp']}=table.concat({n['tmp2']})
+{n['consts']}[{n['i']}]={n['tmp']}
+end
+return {n['tmp']}
+end"""
         # Decrypt strings on startup (eager)
-        return f"""local {n['ck']}={{{key_entries}}}
+        return f"""local {n['ck']}={key_entries}
 local {n['ckn']}=#{n['ck']}
 local {n['consts']}={consts_table}
 for {n['i']},{n['tmp']} in ipairs({n['consts']}) do
@@ -203,8 +223,17 @@ end"""
     # Bytecode key
     # =================================================================
 
+    def _gen_key_table(self, key: List[int], n: Dict[str, str]) -> str:
+        if not self.config.vm_dynamic_keys:
+            return '{' + ','.join(str(k) for k in key) + '}'
+        entries = []
+        for value in key:
+            mask = self.rng.randint(1, 255)
+            entries.append(f"{n['bxor']}({mask},{value ^ mask})")
+        return '{' + ','.join(entries) + '}'
+
     def _gen_bytecode_key(self, n: Dict[str, str]) -> str:
-        return f"""local {n['bk']}={{{','.join(str(k) for k in self.bc_key)}}}
+        return f"""local {n['bk']}={self._gen_key_table(self.bc_key, n)}
 local {n['bkn']}=#{n['bk']}"""
 
     # =================================================================
@@ -245,6 +274,12 @@ local {n['bkn']}=#{n['bk']}"""
         klen = len(self.bc_key)
         return [b ^ self.bc_key[i % klen] for i, b in enumerate(bc)]
 
+    def _hash_bytes(self, data: List[int]) -> int:
+        h = 2166136261
+        for byte in data:
+            h = ((h * 16777619) + byte) % 4294967296
+        return h
+
     def _gen_protos(self, n: Dict[str, str], protos: List[FunctionPrototype]) -> str:
         """Emit the table of all proto data."""
         lines = [f"local {n['protos']}={{}}"]
@@ -252,6 +287,7 @@ local {n['bkn']}=#{n['bk']}"""
             enc_bc = self._encrypt_bytecode(p.bytecode)
             bc_str = ','.join(str(b) for b in enc_bc)
             sp_str = ','.join(str(idx + 1) for idx in p._sp_indices)  # Lua 1-based
+            hash_field = f",ih={self._hash_bytes(enc_bc)}" if self.config.vm_integrity_check else ""
             lines.append(
                 f"{n['protos']}[{i + 1}]="
                 f"{{bc={{{bc_str}}},"
@@ -259,9 +295,19 @@ local {n['bkn']}=#{n['bk']}"""
                 f"va={'true' if p.is_vararg else 'false'},"
                 f"nuv={len(p.upvalues)},"
                 f"ms={p.max_stacksize},"
-                f"sp={{{sp_str}}}}}"
+                f"sp={{{sp_str}}}{hash_field}}}"
             )
         return '\n'.join(lines)
+
+    def _gen_integrity_check(self, n: Dict[str, str]) -> str:
+        return f"""for {n['i']}=1,#{n['protos']} do
+local {n['proto']}={n['protos']}[{n['i']}]
+local {n['tmp']}=2166136261
+for {n['j']}=1,#{n['proto']}.bc do
+{n['tmp']}=(({n['tmp']}*16777619)+{n['proto']}.bc[{n['j']}])%4294967296
+end
+if {n['tmp']}~={n['proto']}.ih then {n['proto']}.bc={{}} end
+end"""
 
     # =================================================================
     # Exec function (the heart of the VM)
@@ -302,6 +348,7 @@ local {n['pc']}=1
 local {n['top']}={n['proto']}.np
 local {n['box']}
 while true do
+if {n['pc']}>#{n['bc']} then return end
 local {n['op']}={n['bxor']}({n['bc']}[{n['pc']}],{n['bk']}[({n['pc']}-1)%{n['bkn']}+1]); {n['pc']}={n['pc']}+1
 {chain}
 end
@@ -342,6 +389,14 @@ end"""
             f"{pc}={pc}+2"
         )
 
+    def _skip_next_inline(self, n: Dict[str, str]) -> str:
+        bx, bc, bk, bkn, pc, opsize = n['bxor'], n['bc'], n['bk'], n['bkn'], n['pc'], n['opsize']
+        return (
+            f"if {pc}>#{bc} then return end;"
+            f"local _no={bx}({bc}[{pc}],{bk}[({pc}-1)%{bkn}+1]);"
+            f"{pc}={pc}+1+{opsize}[_no]"
+        )
+
     def _read_operands(self, fmt: str, n: Dict[str, str]) -> str:
         """Generate operand-reading code based on the instruction format.
         Sets locals named `a`, `b`, `c` based on what the format provides.
@@ -372,6 +427,8 @@ end"""
         a, b, c = n['a'], n['b'], n['c']
         R = n['R']
         CONSTS = n['consts']
+        CGET = n['cget']
+        K = lambda idx: f"{CGET}({idx})" if self.config.vm_lazy_constants else f"{CONSTS}[{idx}]"
         UPVALS = n['upvals']
         ENV = n['env']
         EXEC = n['exec']
@@ -392,14 +449,13 @@ end"""
         if op_name == 'MOVE':
             return ops + f";{R}[{a}]={R}[{b}]"
         if op_name == 'LOADK':
-            return ops + f";{R}[{a}]={CONSTS}[{b}+1]"
+            return ops + f";{R}[{a}]={K(f'{b}+1')}"
         if op_name == 'LOADBOOL':
             # If C != 0, skip the next instruction (size depends on its fmt)
             return (ops + f";{R}[{a}]=({b}~=0);"
                     f"if {c}~=0 then "
                     # Skip next instruction: read its opcode, look up size, advance.
-                    f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                    f"{PC}={PC}+1+{OPSIZE}[_no] "
+                    f"{self._skip_next_inline(n)} "
                     f"end")
         if op_name == 'LOADNIL':
             # R[A..A+B] := nil
@@ -412,9 +468,9 @@ end"""
             return ops + f";{UPVALS}[{b}+1][1]={R}[{a}]"
 
         if op_name == 'GETGLOBAL':
-            return ops + f";{R}[{a}]={ENV}[{CONSTS}[{b}+1]]"
+            return ops + f";{R}[{a}]={ENV}[{K(f'{b}+1')}]"
         if op_name == 'SETGLOBAL':
-            return ops + f";{ENV}[{CONSTS}[{b}+1]]={R}[{a}]"
+            return ops + f";{ENV}[{K(f'{b}+1')}]={R}[{a}]"
 
         if op_name == 'NEWTABLE':
             return ops + f";{R}[{a}]={{}}"
@@ -423,12 +479,12 @@ end"""
         if op_name == 'SETTABLE':
             return ops + f";{R}[{a}][{R}[{b}]]={R}[{c}]"
         if op_name == 'GETTABLEK':
-            return ops + f";{R}[{a}]={R}[{b}][{CONSTS}[{c}+1]]"
+            return ops + f";{R}[{a}]={R}[{b}][{K(f'{c}+1')}]"
         if op_name == 'SETTABLEK':
-            return ops + f";{R}[{a}][{CONSTS}[{b}+1]]={R}[{c}]"
+            return ops + f";{R}[{a}][{K(f'{b}+1')}]={R}[{c}]"
         if op_name == 'SELF':
             return ops + (f";{R}[{a}+1]={R}[{b}];"
-                          f"{R}[{a}]={R}[{b}][{CONSTS}[{c}+1]]")
+                          f"{R}[{a}]={R}[{b}][{K(f'{c}+1')}]")
         if op_name == 'SETLIST':
             # B = count (0 = MULTRET via top), C = block index (1-based)
             FPF = 50
@@ -469,22 +525,19 @@ end"""
             #   if (R[B]==R[C]) ~= A then pc++ (skip the JMP)
             return ops + (
                 f";if ({R}[{b}]=={R}[{c}])~=({a}~=0) then "
-                f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                f"{PC}={PC}+1+{OPSIZE}[_no] "
+                f"{self._skip_next_inline(n)} "
                 f"end"
             )
         if op_name == 'LT':
             return ops + (
                 f";if ({R}[{b}]<{R}[{c}])~=({a}~=0) then "
-                f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                f"{PC}={PC}+1+{OPSIZE}[_no] "
+                f"{self._skip_next_inline(n)} "
                 f"end"
             )
         if op_name == 'LE':
             return ops + (
                 f";if ({R}[{b}]<={R}[{c}])~=({a}~=0) then "
-                f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                f"{PC}={PC}+1+{OPSIZE}[_no] "
+                f"{self._skip_next_inline(n)} "
                 f"end"
             )
         if op_name == 'TEST':
@@ -494,8 +547,7 @@ end"""
                 f";local _v={R}[{a}];"
                 f"local _t=(_v~=nil and _v~=false);"
                 f"if _t~=({b}~=0) then "
-                f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                f"{PC}={PC}+1+{OPSIZE}[_no] "
+                f"{self._skip_next_inline(n)} "
                 f"end"
             )
         if op_name == 'TESTSET':
@@ -503,8 +555,7 @@ end"""
                 f";local _v={R}[{b}];"
                 f"local _t=(_v~=nil and _v~=false);"
                 f"if _t==({c}~=0) then {R}[{a}]=_v else "
-                f"local _no={BXOR}({BC}[{PC}],{BK}[({PC}-1)%{BKN}+1]);"
-                f"{PC}={PC}+1+{OPSIZE}[_no] "
+                f"{self._skip_next_inline(n)} "
                 f"end"
             )
 

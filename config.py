@@ -76,6 +76,10 @@ class ObfuscationConfig:
     # VM
     vm_opcode_count: int = 30             # Number of VM instructions
     vm_obfuscate_interpreter: bool = True # Apply layers 1-6 to the VM stub
+    vm_hardening: str = "basic"           # basic | client-max | max
+    vm_lazy_constants: bool = False       # Decode VM string constants on demand
+    vm_dynamic_keys: bool = False         # Reconstruct VM keys from split fragments
+    vm_integrity_check: bool = False      # Verify encrypted VM bytecode before execution
 
     # --- Global Settings ---
     seed: Optional[int] = None            # None = unique per run
@@ -105,6 +109,11 @@ class ObfuscationConfig:
         self.table_indirection = lv >= ProtectionLevel.MAXIMUM.value
         self.anti_tamper = lv >= ProtectionLevel.MAXIMUM.value
         self.virtualize = lv >= ProtectionLevel.PARANOID.value
+        if lv >= ProtectionLevel.PARANOID.value:
+            self.vm_hardening = "client-max"
+            self.vm_lazy_constants = True
+            self.vm_dynamic_keys = True
+            self.vm_integrity_check = True
 
     def _init_rng(self):
         """Initialize the random number generator."""

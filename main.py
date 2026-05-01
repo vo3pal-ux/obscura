@@ -31,7 +31,7 @@ BANNER = (
     "  \\___/|_.__/|___/\\___|\\__,_|_|  \\__,_|\n"
     f"{Style.RESET_ALL}"
     f"  {Fore.WHITE}Advanced Luau Obfuscator for Roblox Studio{Style.RESET_ALL}\n"
-    f"  {Fore.LIGHTBLACK_EX}v1.0.0 -- 9-Layer Protection System{Style.RESET_ALL}\n"
+    f"  {Fore.LIGHTBLACK_EX}v1.0.1 -- 9-Layer Protection System{Style.RESET_ALL}\n"
 )
 
 
@@ -79,12 +79,14 @@ def print_layer(name: str, enabled: bool):
               help='Process entire directory recursively.')
 @click.option('--density', type=click.Choice(['low', 'medium', 'high']),
               default='medium', help='Dead code injection density.')
+@click.option('--vm-hardening', type=click.Choice(['basic', 'client-max', 'max']),
+              default=None, help='VM hardening profile.')
 @click.option('--lightweight', is_flag=True, default=False,
               help='Extremely lightweight mode (minimal size overhead).')
 @click.option('--quiet', '-q', is_flag=True, default=False,
               help='Suppress banner and verbose output.')
 def main(input_path, output_path, level, vm, antitamper, strings, cff,
-         deadcode, seed, recursive, density, lightweight, quiet):
+         deadcode, seed, recursive, density, vm_hardening, lightweight, quiet):
     """Obscura — Advanced Luau Obfuscator for Roblox Studio"""
 
     if not quiet:
@@ -117,6 +119,11 @@ def main(input_path, output_path, level, vm, antitamper, strings, cff,
         config.control_flow_flatten = cff
         config.inject_dead_code = deadcode
         config.dead_code_density = DeadCodeDensity(density)
+        if vm_hardening is not None:
+            config.vm_hardening = vm_hardening
+            config.vm_lazy_constants = vm_hardening in ("client-max", "max")
+            config.vm_dynamic_keys = vm_hardening in ("client-max", "max")
+            config.vm_integrity_check = vm_hardening in ("client-max", "max")
 
     if seed is not None:
         config.seed = seed
@@ -136,6 +143,8 @@ def main(input_path, output_path, level, vm, antitamper, strings, cff,
         print_layer("Layer 7: Table Indirection", config.table_indirection)
         print_layer("Layer 8: Anti-Tamper", config.anti_tamper)
         print_layer("Layer 9: VM Virtualization", config.virtualize)
+        if config.virtualize:
+            print_status(f"VM hardening: {Fore.YELLOW}{config.vm_hardening}", "vm")
         click.echo()
 
     # Create obfuscator

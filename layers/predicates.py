@@ -37,7 +37,7 @@ class OpaquePredicateGenerator:
                 new_body.append(stmt)
 
             # Randomly inject dead code after opaque-false predicates
-            if self.rng.random() < 0.15:
+            if not isinstance(stmt, (ReturnStatement, BreakStatement, ContinueStatement)) and self.rng.random() < 0.15:
                 dead = self._gen_false_predicate_block()
                 new_body.append(dead)
 
